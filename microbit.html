@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Competició per Grups</title>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --secondary: #f39c12;
+            --danger: #e74c3c;
+            --success: #2ecc71;
+            --dark: #2c3e50;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        .hidden { display: none; }
+
+        input {
+            width: 80%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 10px 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+
+        button:active { transform: scale(0.95); }
+
+        .btn-main { background-color: var(--primary); color: white; }
+        .btn-finish { background-color: var(--danger); color: white; }
+        .btn-start { background-color: var(--success); color: white; font-size: 1.5rem; }
+
+        #timer {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 20px 0;
+            color: var(--dark);
+        }
+
+        /* Matriu 5x5 */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin: 20px auto;
+            max-width: 300px;
+        }
+
+        .dot {
+            width: 40px;
+            height: 40px;
+            background-color: #ddd;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .dot.selected { background-color: var(--secondary); }
+
+        table { width: 100%; margin-top: 20px; border-collapse: collapse; }
+        th, td { padding: 10px; border-bottom: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="setup-section">
+        <h2 id="setup-title">Crear Grup 1</h2>
+        <div id="group-input-zone">
+            <input type="text" id="input-name" placeholder="Nom del grup">
+            <button class="btn-main" onclick="processInput()">Afegir Grup</button>
+        </div>
+        <button id="btn-final-setup" class="hidden btn-finish" onclick="showStartScreen()">FINALITZAR CONFIGURACIÓ</button>
+        <p id="summary" style="font-size: 0.8rem; color: #666;"></p>
+    </div>
+
+    <div id="start-section" class="hidden">
+        <h2>Preparats?</h2>
+        <button class="btn-start" onclick="startTimer()">START</button>
+    </div>
+
+    <div id="timer-section" class="hidden">
+        <h2 id="current-group-display">En marxa...</h2>
+        <div id="timer">00:00.00</div>
+        <button class="btn-finish" onclick="showMatrix()">FINISH</button>
+    </div>
+
+    <div id="matrix-section" class="hidden">
+        <h3>Introdueix el teu patró (6 punts)</h3>
+        <p>Grup: <strong id="matrix-group-name"></strong></p>
+        <div class="grid" id="matrix-grid">
+            </div>
+        <button class="btn-main" onclick="validatePattern()">VERIFICAR</button>
+    </div>
+
+    <div id="result-section" class="hidden">
+        <h2>Classificació Final</h2>
+        <table id="leaderboard">
+            <thead>
+                <tr>
+                    <th>Pos</th>
+                    <th>Grup</th>
+                    <th>Temps</th>
+                </tr>
+            </thead>
+            <tbody id="leaderboard-body"></tbody>
+        </table>
+        <button class="btn-main" onclick="location.reload()">Reiniciar</button>
+    </div>
+</div>
+
+<script>
+    let groups = [];
+    let currentGroupIndex = 0;
+    let isAddingMembers = false;
+    let tempGroupName = "";
+    let tempMembers = [];
+
+    let startTime;
+    let timerInterval;
+    let results = [];
+
+    // Patrons definits per a cada grup (Matriu 5x5 indexada 0-24)
+    // He posat exemples de 6 punts per grup.
+    const groupPatterns = [
+        [0, 1, 2, 3, 4, 5],      // Patró Grup 1
+        [20, 21, 22, 23, 24, 19], // Patró Grup 2
+        [2, 7, 12, 17, 22, 21],   // Patró Grup 3
+        [0, 6, 12, 18, 24, 13]    // Patró Grup 4... afegeix-ne més si vols
+    ];
+
+    let selectedDots = [];
+
+    const inputField = document.getElementById('input-name');
+    const setupTitle = document.getElementById('setup-title');
+    const summary = document.getElementById('summary');
+
+    function processInput() {
+        const val = inputField.value.trim();
+        if (!val) return;
+
+        if (!isAddingMembers) {
+            // Estem guardant el nom del grup
+            tempGroupName = val;
+            isAddingMembers = true;
+            inputField.value = "";
+            inputField.placeholder = "Nom del component";
+            setupTitle.innerText = `Components de ${tempGroupName}`;
+        } else {
+            // Estem afegint components
+            tempMembers.push(val);
+            inputField.value = "";
+            inputField.placeholder = "Següent component...";
+            
+            // Mostrar opció de finalitzar si hi ha almenys 2 components
+            if (tempMembers.length >= 2) {
+                summary.innerHTML = `Grup actual: ${tempGroupName} (${tempMembers.length} membres)`;
+                finishGroupStep();
+            }
+        }
+    }
+
+    function finishGroupStep() {
+        groups.push({ name: tempGroupName, members: [...tempMembers], time: null });
+        
+        // Reiniciar per al següent grup
+        tempMembers = [];
+        isAddingMembers = false;
+        setupTitle.innerText = `Crear Grup ${groups.length + 1}`;
+        inputField.placeholder = "Nom del grup";
+        
+        // Si ja hi ha 2 o més grups, mostrem el botó final
+        if (groups.length >= 2) {
+            document.getElementById('btn-final-setup').classList.remove('hidden');
+        }
+    }
+
+    function showStartScreen() {
+        document.getElementById('setup-section').classList.add('hidden');
+        document.getElementById('start-section').classList.remove('hidden');
+    }
+
+    function startTimer() {
+        document.getElementById('start-section').classList.add('hidden');
+        document.getElementById('timer-section').classList.remove('hidden');
+        startTime = Date.now();
+        timerInterval = setInterval(updateTimer, 10);
+    }
+
+    function updateTimer() {
+        let diff = Date.now() - startTime;
+        document.getElementById('timer').innerText = formatTime(diff);
+    }
+
+    function formatTime(ms) {
+        let date = new Date(ms);
+        let m = String(date.getUTCMinutes()).padStart(2, '0');
+        let s = String(date.getUTCSeconds()).padStart(2, '0');
+        let msPart = String(Math.floor(date.getUTCMilliseconds()/10)).padStart(2, '0');
+        return `${m}:${s}.${msPart}`;
+    }
+
+    function showMatrix() {
+        document.getElementById('timer-section').classList.add('hidden');
+        document.getElementById('matrix-section').classList.remove('hidden');
+        document.getElementById('matrix-group-name').innerText = groups[currentGroupIndex].name;
+        createGrid();
+    }
+
+    function createGrid() {
+        const grid = document.getElementById('matrix-grid');
+        grid.innerHTML = "";
+        selectedDots = [];
+        for (let i = 0; i < 25; i++) {
+            const dot = document.createElement('div');
+            dot.classList.add('dot');
+            dot.onclick = () => toggleDot(i, dot);
+            grid.appendChild(dot);
+        }
+    }
+
+    function toggleDot(index, element) {
+        if (selectedDots.includes(index)) {
+            selectedDots = selectedDots.filter(i => i !== index);
+            element.classList.remove('selected');
+        } else {
+            if (selectedDots.length < 6) {
+                selectedDots.push(index);
+                element.classList.add('selected');
+            }
+        }
+    }
+
+    function validatePattern() {
+        if (selectedDots.length !== 6) {
+            alert("Has de seleccionar exactament 6 punts!");
+            return;
+        }
+
+        // El patró que correspon al grup actual (usant mòdul per si hi ha més grups que patrons definits)
+        let correctPattern = groupPatterns[currentGroupIndex % groupPatterns.length];
+        
+        // Comprovar si els punts coincideixen (sense importar l'ordre)
+        let isCorrect = selectedDots.every(val => correctPattern.includes(val)) && 
+                        correctPattern.every(val => selectedDots.includes(val));
+
+        if (isCorrect) {
+            let endTime = Date.now() - startTime;
+            groups[currentGroupIndex].time = endTime;
+            results.push(groups[currentGroupIndex]);
+            
+            currentGroupIndex++;
+
+            if (currentGroupIndex < groups.length) {
+                // Tornar al crono per al següent grup
+                alert("PATRÓ CORRECTE! Següent grup.");
+                document.getElementById('matrix-section').classList.add('hidden');
+                document.getElementById('timer-section').classList.remove('hidden');
+            } else {
+                // Fi de la competició
+                clearInterval(timerInterval);
+                showResults();
+            }
+        } else {
+            alert("PATRÓ INCORRECTE");
+            document.getElementById('matrix-section').classList.add('hidden');
+            document.getElementById('timer-section').classList.remove('hidden');
+        }
+    }
+
+    function showResults() {
+        document.getElementById('matrix-section').classList.add('hidden');
+        document.getElementById('result-section').classList.remove('hidden');
+        
+        // Ordenar per temps
+        results.sort((a, b) => a.time - b.time);
+        
+        const tbody = document.getElementById('leaderboard-body');
+        tbody.innerHTML = "";
+        results.forEach((res, index) => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${res.name}</td>
+                    <td>${formatTime(res.time)}</td>
+                </tr>
+            `;
+        });
+    }
+</script>
+
+</body>
+</html>
