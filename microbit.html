@@ -165,19 +165,20 @@
     let currentTempGroup = { name: "", members: [] };
     let isNamingGroup = true;
     
-    // El grup que està intentant posar el patró ara mateix
     let groupUnderValidation = null; 
     
     let startTime;
     let timerInterval;
     let finalResults = [];
 
-    // Els teus patrons assignats per ordre de creació
+    // Patrons (0-24) Ampliat a 6 grups
     const groupPatterns = [
-        [0,8,12,17,20,24], // Grup 1 (el primer creat)
-        [0,2,8,9,12,15],   // Grup 2 (el segon creat)
-        [2,9,15,17,20,24], // Grup 3
-        [0,6,12,18,24,5]   // Grup 4
+        [0,8,12,17,20,24], // Patró Grup 1
+        [0,2,8,9,12,15],   // Patró Grup 2
+        [2,9,15,17,20,24], // Patró Grup 3
+        [0,6,12,18,24,5],  // Patró Grup 4
+        [4,9,14,19,24,23], // Patró Grup 5 (Nova L invertida)
+        [2,7,12,17,22,10]  // Patró Grup 6 (Nova Creu vertical + 1 costat)
     ];
     let selectedDots = [];
 
@@ -246,24 +247,20 @@
                Math.floor(d.getUTCMilliseconds()/10).toString().padStart(2,'0');
     }
 
-    // NOVA FUNCIÓ: Busca el grup pel nom quan arriben
     function checkWhoArrived() {
         const arrivalName = document.getElementById('group-arrival-name').value.trim().toLowerCase();
-        
-        // Busquem el grup a la llista (sense importar majúscules/minúscules)
         const groupIndex = groups.findIndex(g => g.name.toLowerCase() === arrivalName);
 
         if (groupIndex === -1) {
-            alert("Aquest nom de grup no existeix a la llista de configuració!");
+            alert("Aquest nom de grup no existeix!");
             return;
         }
 
         if (groups[groupIndex].finished) {
-            alert("Aquest grup ja ha registrat el seu temps!");
+            alert("Aquest grup ja ha acabat!");
             return;
         }
 
-        // Si tot és correcte, guardem quin grup és i mostrem la matriu
         groupUnderValidation = { ...groups[groupIndex], originalIndex: groupIndex };
         showMatrix();
     }
@@ -295,31 +292,26 @@
     function validatePattern() {
         if (selectedDots.length !== 6) return alert("Tria 6 punts!");
         
-        // Busquem el patró usant l'índex original del grup
+        // Utilitzem el patró basat en l'índex (0 a 5)
         let pattern = groupPatterns[groupUnderValidation.originalIndex % groupPatterns.length];
-        let correct = selectedDots.every(v => pattern.includes(v)) && selectedDots.length === pattern.length;
+        let correct = selectedDots.length === pattern.length && selectedDots.every(v => pattern.includes(v));
 
         if (correct) {
-            // Marquem el grup com a finalitzat i guardem temps
             const finalTime = Date.now() - startTime;
             groups[groupUnderValidation.originalIndex].finished = true;
             groups[groupUnderValidation.originalIndex].time = finalTime;
             
             finalResults.push(groups[groupUnderValidation.originalIndex]);
-            
-            // Netegem el camp de text de la pàgina anterior
             document.getElementById('group-arrival-name').value = "";
 
-            // Comprovem si han acabat TOTS
             const allFinished = groups.every(g => g.finished);
 
             if (!allFinished) {
-                alert("PATRÓ CORRECTE! Temps registrat. Torneu al crono.");
+                alert("PATRÓ CORRECTE! Torneu al crono.");
                 document.getElementById('matrix-section').classList.add('hidden');
                 document.getElementById('timer-section').classList.remove('hidden');
             } else {
                 clearInterval(timerInterval);
-                alert("Tots els grups han acabat!");
                 showFinalResults();
             }
         } else {
